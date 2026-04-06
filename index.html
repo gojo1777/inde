@@ -182,6 +182,8 @@ nav {
     <button onclick="showPage('subjects')">Subjects</button>
     <button onclick="showPage('timer')">Study Timer</button>
     <button onclick="showPage('progress')">Progress</button>
+    <button onclick="showPage('alarm')">Alarms</button>
+    <button onclick="showPage('analyse')">Day Analysis</button>
   </div>
 </nav>
 
@@ -200,7 +202,7 @@ nav {
 <!-- HOME PAGE -->
 <div class="page active" id="page-home">
   <h2 class="section-title">Quick Access</h2>
-  <p class="section-sub">Jump into your subjects or track your study session</p>
+  <p class="section-sub">SAYURA your subjects or track your study session</p>
   <div class="subjects-grid">
     <div class="subject-card acc" onclick="showPage('subjects')">
       <div class="icon">📊</div>
@@ -378,6 +380,68 @@ nav {
   </div>
 </div>
 
+<!-- ALARM PAGE -->
+<div class="page" id="page-alarm">
+  <h2 class="section-title">Alarms</h2>
+  <p class="section-sub">Set study reminders and break alerts</p>
+  <div class="timer-layout">
+    <div class="timer-card">
+      <h4 style="font-size:15px;font-weight:600;margin-bottom:16px;">Add New Alarm</h4>
+      <input type="text" id="alarm-label" placeholder="Alarm label (e.g. Accounting revision)" class="subject-select" style="margin-bottom:10px;">
+      <input type="time" id="alarm-time" class="subject-select" style="margin-bottom:10px;">
+      <select id="alarm-sub" class="subject-select">
+        <option value="General">General</option>
+        <option value="Accounting">📊 Accounting</option>
+        <option value="Business Studies">💼 Business Studies</option>
+        <option value="ICT">💻 ICT</option>
+        <option value="Break">☕ Break</option>
+      </select>
+      <button class="btn-primary" onclick="addAlarm()" style="width:100%;">Set Alarm</button>
+      <div id="alarm-banner" style="display:none;margin-top:16px;background:#fef3c7;border:1.5px solid var(--gold);border-radius:12px;padding:14px 16px;text-align:center;">
+        <div style="font-size:1.5rem;margin-bottom:6px;">🔔</div>
+        <div id="alarm-banner-text" style="font-weight:600;font-size:15px;color:var(--ink);"></div>
+        <button class="btn-sm" style="margin-top:10px;" onclick="dismissAlarm()">Dismiss</button>
+      </div>
+    </div>
+    <div class="timer-card">
+      <h4 style="font-size:15px;font-weight:600;margin-bottom:16px;">Active Alarms</h4>
+      <div id="alarm-list"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">No alarms set</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DAY ANALYSIS PAGE -->
+<div class="page" id="page-analyse">
+  <h2 class="section-title">Day Analysis</h2>
+  <p class="section-sub">Your study breakdown — how today went</p>
+  <div class="progress-grid">
+    <!-- Today summary -->
+    <div class="progress-card" style="grid-column: 1 / -1;">
+      <h4 style="margin-bottom:20px;">Today — <span id="analyse-date" style="color:var(--muted);font-weight:400;font-size:14px;"></span></h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:24px;">
+        <div class="sum-box"><div class="sv" id="an-sessions">0</div><div class="sl">Sessions</div></div>
+        <div class="sum-box"><div class="sv" id="an-hours">0h</div><div class="sl">Study Time</div></div>
+        <div class="sum-box"><div class="sv" id="an-best">—</div><div class="sl">Top Subject</div></div>
+        <div class="sum-box"><div class="sv" id="an-streak">0</div><div class="sl">Day Streak</div></div>
+      </div>
+      <h4 style="font-size:13px;color:var(--muted);margin-bottom:12px;font-weight:500;">TIME PER SUBJECT TODAY</h4>
+      <div id="an-bars"></div>
+    </div>
+    <!-- Weekly view -->
+    <div class="progress-card">
+      <h4 style="margin-bottom:16px;">This Week</h4>
+      <div id="an-week"></div>
+    </div>
+    <!-- Advice -->
+    <div class="progress-card">
+      <h4 style="margin-bottom:16px;">Today's Feedback</h4>
+      <div id="an-advice" style="font-size:14px;line-height:1.8;color:var(--slate);"></div>
+      <div class="gold-line" style="margin:16px 0;"></div>
+      <button class="btn-sm" onclick="clearToday()">Clear Today's Data</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── DATA ────────────────────────────────────────────
 const TOPICS = {
@@ -388,17 +452,21 @@ const TOPICS = {
 
 let progress = JSON.parse(localStorage.getItem('al_progress') || '{"acc":[],"bs":[],"ict":[]}');
 let sessions = JSON.parse(localStorage.getItem('al_sessions') || '[]');
+let alarms = JSON.parse(localStorage.getItem('al_alarms') || '[]');
 
 // ─── NAV ─────────────────────────────────────────────
+const PAGES = ['home','subjects','timer','progress','alarm','analyse'];
 function showPage(p) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + p).classList.add('active');
   document.querySelectorAll('.nav-links button').forEach((btn, i) => {
-    btn.classList.toggle('active', ['home','subjects','timer','progress'][i] === p);
+    btn.classList.toggle('active', PAGES[i] === p);
   });
   document.getElementById('hero-section').style.display = p === 'home' ? 'block' : 'none';
   if (p === 'progress') renderProgress();
   if (p === 'home') updateStats();
+  if (p === 'alarm') renderAlarms();
+  if (p === 'analyse') renderAnalysis();
 }
 
 // ─── PROGRESS ────────────────────────────────────────
@@ -479,7 +547,7 @@ function timerToggle() {
         timerRunning = false;
         document.getElementById('timer-btn').textContent = 'Start';
         if (currentMode === 'focus') logSession();
-        try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA==').play(); } catch(e){}
+        playBeep();
         alert(currentMode === 'focus' ? '✅ Focus session complete! Take a break.' : '⏰ Break over! Time to focus.');
         setMode(currentMode);
       }
@@ -504,7 +572,7 @@ function logSession() {
   const now = new Date();
   const entry = { sub, time: now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), date: now.toLocaleDateString() };
   sessions.unshift(entry);
-  if (sessions.length > 20) sessions.pop();
+  if (sessions.length > 100) sessions.pop();
   localStorage.setItem('al_sessions', JSON.stringify(sessions));
   renderSessionLog();
   updateStats();
@@ -527,6 +595,175 @@ function updateStats() {
   document.getElementById('stat-hours').textContent = hrs;
   document.getElementById('stat-sessions').textContent = sessions.length;
   document.getElementById('stat-progress').textContent = Math.round(done / 24 * 100) + '%';
+}
+
+// ─── ALARM ────────────────────────────────────────────
+let alarmCheckInterval = null;
+let firedAlarms = new Set();
+
+function addAlarm() {
+  const label = document.getElementById('alarm-label').value.trim() || 'Study Time';
+  const time = document.getElementById('alarm-time').value;
+  const sub = document.getElementById('alarm-sub').value;
+  if (!time) { alert('Please set a time!'); return; }
+  alarms.push({ id: Date.now(), label, time, sub, active: true });
+  localStorage.setItem('al_alarms', JSON.stringify(alarms));
+  document.getElementById('alarm-label').value = '';
+  document.getElementById('alarm-time').value = '';
+  renderAlarms();
+}
+function deleteAlarm(id) {
+  alarms = alarms.filter(a => a.id !== id);
+  localStorage.setItem('al_alarms', JSON.stringify(alarms));
+  firedAlarms.delete(id);
+  renderAlarms();
+}
+function toggleAlarmActive(id) {
+  const a = alarms.find(x => x.id === id);
+  if (a) { a.active = !a.active; firedAlarms.delete(id); }
+  localStorage.setItem('al_alarms', JSON.stringify(alarms));
+  renderAlarms();
+}
+function renderAlarms() {
+  const el = document.getElementById('alarm-list');
+  if (!alarms.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">No alarms set</div>'; return; }
+  el.innerHTML = alarms.map(a => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:500;">${a.label}</div>
+        <div style="font-size:12px;color:var(--muted);">${a.time} · ${a.sub}</div>
+      </div>
+      <span style="font-size:11px;padding:3px 10px;border-radius:20px;background:${a.active ? '#e1f5ee' : '#f3ede0'};color:${a.active ? '#085041' : '#8a7f70'};">${a.active ? 'On' : 'Off'}</span>
+      <button class="btn-sm" style="margin-top:0;padding:4px 12px;font-size:12px;" onclick="toggleAlarmActive(${a.id})">${a.active ? 'Disable' : 'Enable'}</button>
+      <button class="btn-sm" style="margin-top:0;padding:4px 12px;font-size:12px;border-color:var(--rust);color:var(--rust);" onclick="deleteAlarm(${a.id})">Delete</button>
+    </div>
+  `).join('');
+}
+function dismissAlarm() {
+  document.getElementById('alarm-banner').style.display = 'none';
+}
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.2, 0.4].forEach(offset => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.18);
+      osc.start(ctx.currentTime + offset);
+      osc.stop(ctx.currentTime + offset + 0.2);
+    });
+  } catch(e) {}
+}
+function checkAlarms() {
+  const now = new Date();
+  const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  alarms.forEach(a => {
+    if (a.active && a.time === hhmm && !firedAlarms.has(a.id)) {
+      firedAlarms.add(a.id);
+      playBeep();
+      const banner = document.getElementById('alarm-banner');
+      document.getElementById('alarm-banner-text').textContent = '🔔 ' + a.label + ' (' + a.sub + ')';
+      banner.style.display = 'block';
+      setTimeout(() => { firedAlarms.delete(a.id); }, 61000);
+    }
+  });
+}
+alarmCheckInterval = setInterval(checkAlarms, 10000);
+
+// ─── DAY ANALYSIS ─────────────────────────────────────
+function renderAnalysis() {
+  const today = new Date().toLocaleDateString();
+  document.getElementById('analyse-date').textContent = new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  const todaySessions = sessions.filter(s => s.date === today);
+  const totalMins = todaySessions.length * 25;
+  const hrs = (totalMins / 60).toFixed(1);
+
+  // Count per subject
+  const subCount = {};
+  todaySessions.forEach(s => { subCount[s.sub] = (subCount[s.sub] || 0) + 1; });
+  const sortedSubs = Object.entries(subCount).sort((a,b) => b[1]-a[1]);
+  const bestSub = sortedSubs[0] ? sortedSubs[0][0] : '—';
+
+  // Streak calc
+  let streak = 0;
+  const d = new Date();
+  while (true) {
+    const key = d.toLocaleDateString();
+    if (sessions.some(s => s.date === key)) { streak++; d.setDate(d.getDate()-1); }
+    else break;
+    if (streak > 365) break;
+  }
+
+  document.getElementById('an-sessions').textContent = todaySessions.length;
+  document.getElementById('an-hours').textContent = hrs + 'h';
+  document.getElementById('an-best').textContent = bestSub === '—' ? '—' : bestSub.split(' ')[0];
+  document.getElementById('an-streak').textContent = streak;
+
+  // Subject bars
+  const maxSessions = sortedSubs[0] ? sortedSubs[0][1] : 1;
+  const colors = {'Accounting':'var(--gold)','Business Studies':'var(--rust)','ICT':'var(--forest)','General':'var(--slate)','Break':'var(--muted)'};
+  document.getElementById('an-bars').innerHTML = sortedSubs.length ? sortedSubs.map(([sub, cnt]) => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;">
+        <span>${sub}</span>
+        <span style="color:var(--muted);">${cnt} session${cnt>1?'s':''} · ${cnt*25} min</span>
+      </div>
+      <div style="height:8px;background:var(--paper);border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${Math.round(cnt/maxSessions*100)}%;background:${colors[sub]||'var(--slate)'};border-radius:4px;transition:width 0.5s;"></div>
+      </div>
+    </div>
+  `).join('') : '<div style="color:var(--muted);font-size:13px;">No study sessions recorded today.</div>';
+
+  // Weekly
+  const weekDays = [];
+  for (let i = 6; i >= 0; i--) {
+    const d2 = new Date(); d2.setDate(d2.getDate() - i);
+    const key = d2.toLocaleDateString();
+    const dayName = d2.toLocaleDateString('en-US', {weekday:'short'});
+    const cnt = sessions.filter(s => s.date === key).length;
+    weekDays.push({ dayName, cnt, isToday: i === 0 });
+  }
+  const maxDay = Math.max(...weekDays.map(d => d.cnt), 1);
+  document.getElementById('an-week').innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:8px;height:80px;margin-bottom:10px;">
+      ${weekDays.map(d => `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="width:100%;background:${d.isToday ? 'var(--gold)' : 'var(--paper)'};border:1px solid ${d.isToday ? 'var(--gold)' : 'var(--border)'};border-radius:4px;height:${d.cnt ? Math.max(12, Math.round(d.cnt/maxDay*60)) : 4}px;transition:height 0.4s;"></div>
+          <div style="font-size:11px;color:${d.isToday ? 'var(--gold)' : 'var(--muted)'};">${d.dayName}</div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-size:12px;color:var(--muted);text-align:center;">Sessions per day this week</div>
+  `;
+
+  // Advice
+  let advice = '';
+  if (todaySessions.length === 0) advice = '📚 No sessions today yet. Start with even one 25-minute Pomodoro — small steps matter!';
+  else if (todaySessions.length < 3) advice = `✅ Good start — ${todaySessions.length} session${todaySessions.length>1?'s':''} done. Try to reach 4 sessions for a solid study day.`;
+  else if (todaySessions.length < 6) advice = `💪 Great work — ${todaySessions.length} sessions completed today! You're building a strong habit.`;
+  else advice = `🏆 Outstanding! ${todaySessions.length} sessions today — that's ${totalMins} minutes of focused study. Make sure to rest well tonight.`;
+
+  if (sortedSubs.length >= 2) {
+    const neglected = ['Accounting','Business Studies','ICT'].find(s => !subCount[s]);
+    if (neglected) advice += `\n\n⚠️ You haven't studied <strong>${neglected}</strong> today. Balance is key for A/L success!`;
+  }
+  if (streak >= 3) advice += `\n\n🔥 ${streak}-day study streak! Keep it going.`;
+
+  document.getElementById('an-advice').innerHTML = advice.replace(/\n\n/g, '<br><br>');
+}
+
+function clearToday() {
+  if (!confirm('Clear today\'s session data?')) return;
+  const today = new Date().toLocaleDateString();
+  sessions = sessions.filter(s => s.date !== today);
+  localStorage.setItem('al_sessions', JSON.stringify(sessions));
+  renderAnalysis();
+  updateStats();
+  renderSessionLog();
 }
 
 // ─── INIT ─────────────────────────────────────────────
